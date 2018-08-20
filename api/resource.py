@@ -1,52 +1,77 @@
 from tastypie.resources import ModelResource, ALL
 from tastypie.authorization import Authorization
-from tastypie.authentication import Authentication
+from tastypie.authentication import Authentication, BasicAuthentication, MultiAuthentication, ApiKeyAuthentication
 from tastypie.exceptions import BadRequest
 from tastypie import fields
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from api.models import Profile
-import tastypie
+
 
 class UserResource(ModelResource):
     class Meta:
         queryset = User.objects.all()
-        # resource_name = 'user'
-        allowed_methods = ('get', 'post', 'put', 'delete', 'patch')
-        # filtering = {"id": ALL}
-        authentication = Authentication()
+        fields = ['username', 'first_name', 'last_name']
+        excludes = ['email', 'password', 'is_superuser']
+        resource_name = 'auth/users'
+        # filtering = {
+        #     "slug": ('exact', 'startswith',),
+        #     "username": ALL,
+        # }
+        include_resource_uri = False
+        authentication = ApiKeyAuthentication()
         authorization = Authorization()
 
-    # def dehydrate(self, bundle):
-    #     return super(UserResource, self).dehydrate(bundle=bundle)
 
 class UserSignUpResource(ModelResource):
-    user = tastypie.fields.ForeignKey(UserResource, 'user', full=True)
+    user = fields.ForeignKey(UserResource, 'user', full=True)
 
     class Meta:
         queryset = Profile.objects.all()
         object_class = Profile
-        resource_name = 'register'
-        fields = ['user', 'address', 'birthday']
+        resource_name = 'registers'
         allowed_methods = ['post']
-        # include_resource_uri = False
         authentication = Authentication()
         authorization = Authorization()
         always_return_data = True
 
-    def obj_create(self, bundle, request=None, **kwargs):
+    def obj_create(self, bundle, **kwargs):
         try:
             bundle = super(UserSignUpResource, self).obj_create(bundle)
-            bundle.obj.set_password(bundle.data.get('password'))
-            bundle.obj.save()
+            bundle.obj.user.set_password(bundle.data['user']['password'])
+            bundle.obj.user.save()
         except IntegrityError:
             raise BadRequest('Username already exists')
-
         return bundle
 
-# class ProfileResource(ModelResource):
-#     user = fields.ForeignKey(UserResource, 'user')
 
-#     class Meta:
-#         queryset = Profile.objects.all()
-#         resource_name = 'profile'
+class UserSignInResource(ModelResource):
+    class Meta:
+        queryset = User.objects.all()
+        excludes = ['password', 'is_superuser']
+        resource_name = 'auth/users'
+        filtering = {
+            "slug": ('exact', 'startswith',),
+            "username": ALL,
+        }
+        authentication = ApiKeyAuthentication()
+        authorization = Authorization()
+
+    def dehydrate(self, bundle):
+        bundle.data['key'] = bundle.obj.api_key.key
+        return bundle
+
+
+class ProfileResource(ModelResource):
+    user = fields.ForeignKey(UserResource, 'user', full=True)
+
+    class Meta:
+        queryset = Profile.objects.all()
+        resource_name = 'profiles'
+        # allowed_methods = ['post','put','patch']
+        authentication = Authentication()
+        authorization = Authorization()
+        fields = ['other_name', 'birthday', 'address', 'phone_number',
+                  'photo_url', 'user']
+        always_return_data = True
+        include_resource_uri = False
