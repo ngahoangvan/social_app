@@ -54,7 +54,7 @@ class Post(models.Model):
     watchers_count = models.IntegerField(default=0)
 
     def __str__(self):
-        return str(self.title) + ' -Post of ' + str(self.author.last_name)
+        return str(self.title) + ' -Post of ' + str(self.author.username)
 
 
 class Like(models.Model):
